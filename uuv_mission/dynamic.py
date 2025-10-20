@@ -100,22 +100,30 @@ class ClosedLoop:
             kd: derivative gain
         """
         self.submarine = submarine
-        self.controller = PDController(kp, kd)  # Line 108: Call PD controller
+        self.controller = PDController(kp, kd)
         self.dt = submarine.dt
     
-    def simulate(self, mission: Mission) -> Trajectory:
-        """Simulate closed-loop system"""
+    def simulate(self, mission: Mission, disturbances: np.ndarray = None) -> Trajectory:
+        """Simulate closed-loop system with optional disturbances"""
+        self.submarine.reset_state()
         self.controller.reset()
         positions = []
+        
+        # If no disturbances provided, use zeros
+        if disturbances is None:
+            disturbances = np.zeros(len(mission.reference))
         
         for t in range(len(mission.reference)):
             current_depth = self.submarine.get_depth()
             reference_depth = mission.reference[t]
             
-            # Compute control: u[t] = KP * e[t] + KD * (e[t] - e[t-1])
+            # Compute control action
             u = self.controller.compute_control(reference_depth, current_depth)
             
-            self.submarine.update(u)
+            # Apply transition with disturbance
+            self.submarine.transition(u, disturbances[t])
+            
+            # Record position
             positions.append(self.submarine.get_position())
         
         return Trajectory(np.array(positions))
