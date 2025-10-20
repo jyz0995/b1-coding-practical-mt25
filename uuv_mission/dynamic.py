@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from .terrain import generate_reference_and_limits
 
 class Submarine:
@@ -75,9 +76,16 @@ class Mission:
 
     @classmethod
     def from_csv(cls, file_name: str):
-        # You are required to implement this method
-        pass
-
+        # 读取 CSV 文件
+        data = pd.read_csv(file_name)
+        
+        # 将每一列转换为 numpy 数组
+        reference = data['reference'].to_numpy()
+        cave_height = data['cave_height'].to_numpy()
+        cave_depth = data['cave_depth'].to_numpy()
+        
+        # 返回 Mission 实例
+        return cls(reference, cave_height, cave_depth)
 
 class ClosedLoop:
     def __init__(self, plant: Submarine, controller):
