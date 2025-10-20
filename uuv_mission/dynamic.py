@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from .terrain import generate_reference_and_limits
+from .control import PDController
 
 class Submarine:
     def __init__(self):
@@ -88,27 +89,36 @@ class Mission:
         return cls(reference, cave_height, cave_depth)
 
 class ClosedLoop:
-    def __init__(self, plant: Submarine, controller):
-        self.plant = plant
-        self.controller = controller
-
-    def simulate(self,  mission: Mission, disturbances: np.ndarray) -> Trajectory:
-
-        T = len(mission.reference)
-        if len(disturbances) < T:
-            raise ValueError("Disturbances must be at least as long as mission duration")
+    
+    def __init__(self, submarine: Submarine, kp: float = 0.15, kd: float = 0.6):
+        """
+        Initialize closed-loop system
         
-        positions = np.zeros((T, 2))
-        actions = np.zeros(T)
-        self.plant.reset_state()
-
-        for t in range(T):
-            positions[t] = self.plant.get_position()
-            observation_t = self.plant.get_depth()
-            # Call your controller here
-            self.plant.transition(actions[t], disturbances[t])
-
-        return Trajectory(positions)
+        Args:
+            submarine: Submarine instance
+            kp: proportional gain
+            kd: derivative gain
+        """
+        self.submarine = submarine
+        self.controller = PDController(kp, kd)  # Line 108: Call PD controller
+        self.dt = submarine.dt
+    
+    def simulate(self, mission: Mission) -> Trajectory:
+        """Simulate closed-loop system"""
+        self.controller.reset()
+        positions = []
+        
+        for t in range(len(mission.reference)):
+            current_depth = self.submarine.get_depth()
+            reference_depth = mission.reference[t]
+            
+            # Compute control: u[t] = KP * e[t] + KD * (e[t] - e[t-1])
+            u = self.controller.compute_control(reference_depth, current_depth)
+            
+            self.submarine.update(u)
+            positions.append(self.submarine.get_position())
+        
+        return Trajectory(np.array(positions))
         
     def simulate_with_random_disturbances(self, mission: Mission, variance: float = 0.5) -> Trajectory:
         disturbances = np.random.normal(0, variance, len(mission.reference))
